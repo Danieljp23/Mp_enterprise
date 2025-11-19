@@ -5,6 +5,15 @@ import 'package:maple/firebase_conection/firebase_auth.dart';
 import 'package:maple/models/task.dart';
 import 'package:maple/services/google_auth_client.dart';
 
+class WorkspaceAuthException implements Exception {
+  WorkspaceAuthException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class GoogleWorkspaceService {
   GoogleWorkspaceService({
     required FirebaseAuthRepository authRepository,
@@ -20,7 +29,9 @@ class GoogleWorkspaceService {
     await _authRepository.refreshGoogleSignIn();
     final GoogleSignInAccount? account = _authRepository.currentGoogleUser;
     if (account == null) {
-      throw StateError('Usuário Google não autenticado.');
+      throw WorkspaceAuthException(
+        'Conecte sua conta do Google Workspace para acessar as tarefas.',
+      );
     }
 
     final headers = await account.authHeaders;

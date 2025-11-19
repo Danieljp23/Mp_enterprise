@@ -17,13 +17,24 @@ class ScreenTask extends StatefulWidget {
 
 class _ScreenTaskState extends State<ScreenTask> {
   bool _redirecting = false;
+  bool _requestedInitialLoad = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TaskProvider>().loadTasks();
+      _tryLoadTasks();
     });
+  }
+
+  void _tryLoadTasks() {
+    if (!mounted) return;
+    final authProvider = context.read<AuthProvider>();
+    final taskProvider = context.read<TaskProvider>();
+    if (authProvider.workspaceLinked && !_requestedInitialLoad) {
+      _requestedInitialLoad = true;
+      taskProvider.loadTasks();
+    }
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -32,9 +43,20 @@ class _ScreenTaskState extends State<ScreenTask> {
     Navigator.pushReplacementNamed(context, FirstScreen.routeName);
   }
 
+  Future<void> _handleLinkWorkspace() async {
+    final authProvider = context.read<AuthProvider>();
+    await authProvider.linkWorkspaceAccount();
+    if (!mounted) return;
+    if (authProvider.workspaceLinked) {
+      _requestedInitialLoad = false;
+      _tryLoadTasks();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
+    final authProvider = context.watch<AuthProvider>();
+    final user = authProvider.user;
     if (user == null && !_redirecting) {
       _redirecting = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -46,6 +68,13 @@ class _ScreenTaskState extends State<ScreenTask> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    if (authProvider.workspaceLinked && !_requestedInitialLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryLoadTasks());
+    }
+
+    final taskProvider = context.watch<TaskProvider>();
+
     return Scaffold(
       appBar: AppBar(
         iconTheme: const IconThemeData(
@@ -71,7 +100,9 @@ class _ScreenTaskState extends State<ScreenTask> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () => context.read<TaskProvider>().loadTasks(),
+            onPressed: authProvider.workspaceLinked
+                ? () => context.read<TaskProvider>().loadTasks()
+                : null,
           ),
         ],
       ),
@@ -113,7 +144,7 @@ class _ScreenTaskState extends State<ScreenTask> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => modalTask(context),
+        onPressed: authProvider.workspaceLinked ? () => modalTask(context) : null,
         backgroundColor: MyColors.orangeDark,
         label: const Row(
           children: [
@@ -132,40 +163,86 @@ class _ScreenTaskState extends State<ScreenTask> {
           ],
         ),
       ),
-      body: Consumer<TaskProvider>(
-        builder: (context, taskProvider, _) {
-          if (taskProvider.isLoading && taskProvider.tasks.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (taskProvider.error != null && taskProvider.tasks.isEmpty) {
-            return Center(
+      body: authProvider.workspaceLinked
+          ? _buildTaskBody(taskProvider)
+          : _buildWorkspaceLinkCallout(authProvider      ),
+    );
+  }
+
+  Widget _buildWorkspaceLinkCallout(AuthProvider authProvider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off,
+              size: 64,
+              color: MyColors.orangeDark,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Conecte seu Google Workspace para visualizar e criar tarefas.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: authProvider.isLoading ? null : _handleLinkWorkspace,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: MyColors.orangeDark,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(200, 48),
+              ),
               child: Text(
-                taskProvider.error!,
+                authProvider.isLoading ? 'Conectando...' : 'Conectar Workspace',
+              ),
+            ),
+            if (authProvider.error != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                authProvider.error!,
+                style: const TextStyle(color: Colors.red),
                 textAlign: TextAlign.center,
               ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: taskProvider.loadTasks,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: taskProvider.tasks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final task = taskProvider.tasks[index];
-                return Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: ListTile(
-                    title: Text(task.summary),
-                    subtitle: Text(
-                      task.notes.isEmpty ? 'Sem descrição' : task.notes,
-                    ),
-                    trailing: Text(task.status),
-                  ),
-                );
-              },
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskBody(TaskProvider taskProvider) {
+    if (taskProvider.isLoading && taskProvider.tasks.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (taskProvider.error != null && taskProvider.tasks.isEmpty) {
+      return Center(
+        child: Text(
+          taskProvider.error!,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: taskProvider.loadTasks,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: taskProvider.tasks.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final task = taskProvider.tasks[index];
+          return Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              title: Text(task.summary),
+              subtitle: Text(
+                task.notes.isEmpty ? 'Sem descrição' : task.notes,
+              ),
+              trailing: Text(task.status),
             ),
           );
         },
