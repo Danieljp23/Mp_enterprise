@@ -23,6 +23,7 @@ class FirebaseAuthRepository {
 
   User? get currentUser => _firebaseAuth.currentUser;
   GoogleSignInAccount? get currentGoogleUser => _googleSignIn.currentUser;
+  bool get isWorkspaceLinked => _googleSignIn.currentUser != null;
 
   Future<User?> signInWithGoogle() async {
     final googleUser = await _googleSignIn.signIn();
@@ -35,6 +36,41 @@ class FirebaseAuthRepository {
     );
     final userCredential = await _firebaseAuth.signInWithCredential(credential);
     return userCredential.user;
+  }
+
+  Future<User?> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    final credential = await _firebaseAuth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return credential.user;
+  }
+
+  Future<User?> registerWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return credential.user;
+  }
+
+  Future<void> linkWorkspaceAccount() async {
+    try {
+      await _googleSignIn.signInSilently();
+    } catch (_) {
+      // Ignored - fallback to interactive sign-in below.
+    }
+    if (_googleSignIn.currentUser != null) {
+      await _googleSignIn.currentUser!.authentication;
+      return;
+    }
+    await _googleSignIn.signIn();
   }
 
   Future<void> refreshGoogleSignIn() async {

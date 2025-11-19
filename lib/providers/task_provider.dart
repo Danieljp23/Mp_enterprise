@@ -21,6 +21,8 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _tasks = await _workspaceService.fetchTasks();
+    } on WorkspaceAuthException catch (e) {
+      _error = e.message;
     } catch (e) {
       _error = 'Erro ao carregar tarefas: $e';
     } finally {
@@ -44,6 +46,8 @@ class TaskProvider extends ChangeNotifier {
         dueDate: dueDate,
       );
       _tasks = [..._tasks, created];
+    } on WorkspaceAuthException catch (e) {
+      _error = e.message;
     } catch (e) {
       _error = 'Erro ao criar tarefa: $e';
     } finally {

@@ -1,4 +1,3 @@
-import 'package:easy_splash_screen/easy_splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:maple/providers/auth_provider.dart';
 import 'package:maple/screens/screen_first.dart';
@@ -19,9 +18,18 @@ class _SplashState extends State<Splash> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.delayed(const Duration(seconds: 2));
       final authProvider = context.read<AuthProvider>();
+      
+      // Aguarda o AuthProvider terminar de inicializar
+      while (authProvider.isLoading && mounted) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      // Aguarda um tempo mínimo para mostrar a splash
+      await Future.delayed(const Duration(seconds: 2));
+      
       if (!mounted) return;
+      
       if (authProvider.isAuthenticated) {
         Navigator.pushReplacementNamed(context, ScreenTask.routeName);
       } else {
@@ -32,16 +40,23 @@ class _SplashState extends State<Splash> {
 
   @override
   Widget build(BuildContext context) {
-    return EasySplashScreen(
-      logo: Image.asset(
-        'images/logo_maple.png',
-      ),
-      logoWidth: 150,
+    return Scaffold(
       backgroundColor: Colors.white,
-      loaderColor: Colors.deepOrange,
-      durationInSeconds: 3,
-      navigator: Container(),
-      showLoader: true,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'images/logo_maple.png',
+              width: 150,
+            ),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(
+              color: Colors.deepOrange,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
